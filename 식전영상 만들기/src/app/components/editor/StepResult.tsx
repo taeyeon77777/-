@@ -1,3 +1,4 @@
+import { renderVideo, saveVideo, RenderSlide } from "../../utils/videoExport";
 import { useState, useEffect } from "react";
 import { Download, Share2, Check, Film, Copy, CreditCard, Shield, Eye, Pencil, Lock, History, FileVideo } from "lucide-react";
 import { DraftStatus } from "../../utils/draftStorage";
@@ -10,6 +11,7 @@ interface StepResultProps {
   templateEmoji: string;
   fixedBgm: string;
   photoCount: number;
+  renderSlides: RenderSlide[];
   videoStatus: DraftStatus;   // draft | preview | paid
   onRevise: () => void;       // 시안 수정하기 (draft/preview만)
   onPaid: () => void;
@@ -28,54 +30,53 @@ const PROGRESS_STEPS = [
 
 export function StepResult({
   groomName, brideName, weddingDate,
-  templateTitle, templateEmoji, fixedBgm, photoCount,
+  templateTitle, templateEmoji, fixedBgm, photoCount, renderSlides,
   videoStatus, onRevise, onPaid, onRestart, onGoHistory,
 }: StepResultProps) {
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
-  const [isDone, setIsDone] = useState(false);
+  const [isDone, setIsDone] = useState(true);
   const [payProcessing, setPayProcessing] = useState(false);
-  const [paid, setPaid] = useState(videoStatus === "paid");
+  const [paid, setPaid] = useState(false); // 결제 검증 API 연결 전에는 결제 완료 상태를 신뢰하지 않음
   const [copied, setCopied] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
-  const [reviseCount, setReviseCount] = useState(0); // 수정 횟수 (무제한)
+  const [reviseCount, setReviseCount] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportError, setExportError] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
+  const [videoExtension, setVideoExtension] = useState("webm"); // 수정 횟수 (무제한)
 
-  // 렌더링 진행 애니메이션
-  useEffect(() => {
-    const totalDuration = PROGRESS_STEPS.reduce((a, s) => a + s.duration, 0);
-    let elapsed = 0;
-    const timer = setInterval(() => {
-      elapsed += 80;
-      setProgress(Math.min((elapsed / totalDuration) * 100, 100));
-      let acc = 0;
-      for (let i = 0; i < PROGRESS_STEPS.length; i++) {
-        acc += PROGRESS_STEPS[i].duration;
-        if (elapsed < acc) { setCurrentStep(i); break; }
-      }
-      if (elapsed >= totalDuration) {
-        clearInterval(timer);
-        setProgress(100);
-        setCurrentStep(PROGRESS_STEPS.length);
-        setTimeout(() => setIsDone(true), 400);
-      }
-    }, 80);
-    return () => clearInterval(timer);
-  }, []);
+  // 실제 인코딩은 사용자가 영상 파일 만들기 버튼을 누를 때 시작합니다.
+  useEffect(() => { setIsDone(true); }, []);
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(`https://moafilm.kr/preview/${Date.now()}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setExportError('공유 링크는 영상 서버 저장 기능을 연결한 후 사용할 수 있습니다. 현재는 파일을 다운로드해 공유해 주세요.');
+  };
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true); setExportProgress(0); setExportError('');
+    try {
+      const result = await renderVideo({
+        slides: renderSlides,
+        title: `${groomName} ♥ ${brideName}`,
+        subtitle: fmtDate,
+        onProgress: setExportProgress,
+      });
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
+      const url = URL.createObjectURL(result.blob);
+      setVideoUrl(url); setVideoBlob(result.blob); setVideoExtension(result.extension);
+      saveVideo(result.blob, result.extension, 'moafilm-wedding');
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : '영상 제작에 실패했습니다.');
+    } finally { setExporting(false); }
   };
 
   const handlePay = () => {
     setShowPayModal(false);
-    setPayProcessing(true);
-    setTimeout(() => {
-      setPayProcessing(false);
-      setPaid(true);
-      onPaid();
-    }, 2500);
+    setExportError('실제 결제 서비스는 아직 연결되지 않았습니다. 결제 없이 영상 파일을 시험 제작할 수 있습니다.');
   };
 
   const handleRevise = () => {
@@ -123,6 +124,10 @@ export function StepResult({
       </div>
 
       <div className="flex-1 px-4 py-5 space-y-4 pb-10">
+        {exporting && <div className="rounded-xl bg-white p-4 text-sm text-rose-600 font-bold">실제 영상 제작 중: {exportProgress}% · 화면을 닫지 마세요.</div>}
+        {exportError && <div role="alert" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">{exportError}</div>}
+        {videoUrl && <div className="rounded-xl bg-white p-4 space-y-2"><div className="font-bold text-sm">제작된 영상 확인</div><video src={videoUrl} controls playsInline className="w-full rounded-lg"/><button onClick={() => videoBlob && saveVideo(videoBlob, videoExtension, 'moafilm-wedding')} className="w-full rounded-xl bg-green-600 text-white py-3 font-bold">영상 다시 다운로드 ({videoExtension.toUpperCase()})</button></div>}
+
 
         {!isDone ? (
           /* ── 렌더링 중 ── */
@@ -188,9 +193,9 @@ export function StepResult({
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  ["파일 형식", "MP4 (H.264)"],
-                  ["해상도", "1920 × 1080"],
-                  ["화질", "FHD 1080p"],
+                  ["파일 형식", "MP4 또는 WebM"],
+                  ["해상도", "1280 × 720"],
+                  ["화질", "HD 720p"],
                   ["비율", "16 : 9"],
                   ["BGM", fixedBgm],
                   ["사진 수", `${photoCount}장`],
@@ -204,8 +209,8 @@ export function StepResult({
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-3">
-              <button className="w-full py-4 rounded-2xl font-bold bg-green-500 text-white flex items-center justify-center gap-2 hover:bg-green-600 transition-all shadow-lg shadow-green-200 active:scale-95">
-                <Download size={18} /> FHD MP4 다운로드
+              <button onClick={handleExport} disabled={exporting} className="w-full py-4 rounded-2xl font-bold bg-green-500 text-white flex items-center justify-center gap-2 hover:bg-green-600 transition-all shadow-lg shadow-green-200 active:scale-95">
+                <Download size={18} /> 실제 영상 생성 및 다운로드
               </button>
               <button onClick={handleCopyLink}
                 className="w-full py-3 rounded-2xl font-semibold bg-gray-50 text-gray-600 flex items-center justify-center gap-2 hover:bg-gray-100 transition-all border border-gray-200">
@@ -298,9 +303,9 @@ export function StepResult({
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  ["파일 형식", "MP4 (H.264)"],
-                  ["해상도", "1920 × 1080"],
-                  ["화질", "FHD 1080p"],
+                  ["파일 형식", "MP4 또는 WebM"],
+                  ["해상도", "1280 × 720"],
+                  ["화질", "HD 720p"],
                   ["비율", "16 : 9"],
                 ].map(([k, v]) => (
                   <div key={k} className="bg-gray-50 rounded-xl px-3 py-2.5">
@@ -310,7 +315,7 @@ export function StepResult({
                 ))}
               </div>
               <div className="mt-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 text-[10px] text-amber-700 leading-relaxed">
-                · 시안은 360p 워터마크 샘플 · 결제 후 FHD 1080p MP4 즉시 다운로드
+                · 영상 파일은 브라우저에서 실제 생성됩니다. MP4 지원 여부는 브라우저에 따라 다르며 음악은 포함되지 않습니다.
               </div>
             </div>
 
@@ -344,7 +349,7 @@ export function StepResult({
                   className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                     copied ? "bg-green-500 text-white" : "bg-rose-500 text-white hover:bg-rose-600"
                   }`}>
-                  {copied ? <><Check size={12} /> 복사됨</> : <><Copy size={12} /> 복사</>}
+                  {copied ? <><Check size={12} /> 복사됨</> : <><Copy size={12} /> 공유 기능 준비 중</>}
                 </button>
               </div>
             </div>
@@ -353,12 +358,12 @@ export function StepResult({
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
               <div className="bg-gradient-to-r from-indigo-500 to-violet-500 px-5 py-4 text-white">
                 <div className="font-bold text-base mb-0.5">최종 영상 받기</div>
-                <div className="text-sm opacity-85">결제 후 FHD 1920×1080 MP4 즉시 다운로드</div>
+                <div className="text-sm opacity-85">영상 파일 생성 테스트 · 1280×720 · 브라우저 지원 형식</div>
               </div>
               <div className="p-5 space-y-3">
                 {[
                   { icon: "✓", text: "워터마크 완전 제거" },
-                  { icon: "✓", text: "FHD 1920×1080 MP4 파일" },
+                  { icon: "✓", text: "FHD 1280×720 MP4 파일" },
                   { icon: "✓", text: "16:9 비율 · H.264 인코딩" },
                   { icon: "✓", text: "결제 후 7일간 재다운로드" },
                   { icon: "🔒", text: "결제 후 영상 수정 불가" },
@@ -371,11 +376,11 @@ export function StepResult({
                   <span className="text-2xl font-extrabold text-gray-900">9,900원</span>
                   <span className="text-gray-400 text-sm">/ 1회</span>
                 </div>
-                <button onClick={() => setShowPayModal(true)}
+                <button onClick={handleExport}
                   className="w-full py-4 rounded-2xl font-bold text-white bg-gradient-to-r from-indigo-500 to-violet-500 hover:opacity-90 transition-all shadow-lg shadow-indigo-200 active:scale-95 flex items-center justify-center gap-2">
-                  <CreditCard size={17} /> 결제하고 최종 영상 받기
+                  <Download size={17} /> 실제 영상 파일 만들기 (무료 테스트)
                 </button>
-                <p className="text-[10px] text-center text-gray-400">네이버페이 · 카카오페이 · 카드 결제 가능</p>
+                <p className="text-[10px] text-center text-gray-400">실제 결제 연동 전 테스트 버전 · 브라우저에 따라 WebM으로 저장됩니다 · BGM 미포함</p>
               </div>
             </div>
           </>
@@ -401,7 +406,7 @@ export function StepResult({
             <div className="bg-gray-50 rounded-2xl p-4 mb-5 space-y-2">
               {[
                 ["상품명", `${templateTitle} · ${groomName} ♥ ${brideName}`],
-                ["해상도", "FHD 1920×1080 · MP4"],
+                ["해상도", "FHD 1280×720 · MP4"],
                 ["결제 금액", "9,900원"],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between text-sm">
