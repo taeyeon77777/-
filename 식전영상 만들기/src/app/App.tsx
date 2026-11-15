@@ -4,9 +4,10 @@ import { NaverLoginPage } from "./components/NaverLoginPage";
 import { EditorFlow } from "./components/EditorFlow";
 import { ProjectHistory } from "./components/ProjectHistory";
 import { TemplateEditorPage } from "./components/admin/TemplateEditorPage";
+import { CustomerTemplateStudio } from "./components/CustomerTemplateStudio";
 import { AdminDashboard } from "./components/admin/AdminDashboard";
 
-type Page = "landing" | "login" | "editor" | "history" | "admin" | "customers";
+type Page = "landing" | "login" | "editor" | "history" | "admin" | "customers" | "template-test";
 
 export default function App() {
   const [page, setPage] = useState<Page>("landing");
@@ -34,6 +35,8 @@ export default function App() {
   return (
     <div className="size-full bg-gray-200 flex items-center justify-center min-h-screen">
       {/* MARKER-MAKE-KIT-INVOKED */}
+      {page === "landing" && <button onClick={() => setPage("template-test")} style={{position:"fixed",bottom:18,right:18,zIndex:1000,background:"#be587a",color:"white",padding:"12px 16px",borderRadius:12,fontWeight:700}}>템플릿 영상 테스트</button>}
+      {page === "template-test" && <CustomerTemplateStudio onBack={() => setPage("landing")} />}
       {page === "landing" && (
         <LandingPage
           onStart={handleStart}

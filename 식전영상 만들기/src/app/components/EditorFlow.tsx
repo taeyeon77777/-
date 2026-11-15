@@ -221,6 +221,7 @@ export function EditorFlow({ templateId, draftId: initialDraftId, isAdmin, onBac
           fixedBgm={meta.fixedBgm}
           photoCount={finalSlots.filter((s) => s.photo).length || photos.length}
           renderSlides={finalSlots.filter((s) => s.photo).map((s) => ({ url: s.photo!.url, caption: s.caption }))}
+          templateId={templateId}
           videoStatus={videoStatus}
           onRevise={() => setStep("arrange")}
           onPaid={handlePaid}

@@ -120,19 +120,33 @@ export function StepArrange({
   requiredPhotos, uploadedPhotos, isAdmin, onNext, onBack, onTempSave, onGoHistory, onGoAdmin,
 }: StepArrangeProps) {
   const theme = getTemplateTheme(templateId);
+  // Read the administrator's locally saved Canva background for this template.
+  const customBackground = (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`moafilm_template_design_${templateId || "w1"}`) || "null");
+      return saved?.bg?.type === "image" && typeof saved.bg.imageDataUrl === "string" ? saved.bg.imageDataUrl : null;
+    } catch { return null; }
+  })();
   const slotCount = Math.min(requiredPhotos, SLOT_DEFS.length);
 
-  const [slots, setSlots] = useState<Slot[]>(() =>
-    Array.from({ length: slotCount }, (_, i) => ({
-      index: i,
-      label: SLOT_DEFS[i].label,
-      desc: SLOT_DEFS[i].desc,
-      hasPhoto: SLOT_DEFS[i].hasPhoto,
-      hasCaption: SLOT_DEFS[i].hasCaption,
-      photo: null,
-      caption: SLOT_DEFS[i].defaultCaption,
-    }))
-  );
+  // 업로드한 사진을 사진이 필요한 장면에 순서대로 자동 배치합니다.
+  // 제목/구분선처럼 사진이 없는 장면은 건너뜁니다.
+  const [slots, setSlots] = useState<Slot[]>(() => {
+    let nextPhoto = 0;
+    return Array.from({ length: slotCount }, (_, i) => {
+      const definition = SLOT_DEFS[i];
+      const photo = definition.hasPhoto ? (uploadedPhotos[nextPhoto++] ?? null) : null;
+      return {
+        index: i,
+        label: definition.label,
+        desc: definition.desc,
+        hasPhoto: definition.hasPhoto,
+        hasCaption: definition.hasCaption,
+        photo,
+        caption: definition.defaultCaption,
+      };
+    });
+  });
 
   const [currentIdx, setCurrentIdx] = useState(0);
   const [showGrid,    setShowGrid]    = useState(false);
@@ -272,6 +286,11 @@ export function StepArrange({
               groomName={groomName} brideName={brideName} weddingDate={weddingDate}
               onSelectPhoto={() => setShowPicker(true)}
             />
+          )}
+
+          {/* Canva background overlay: local editor preview. Customer photo stays visible above the background. */}
+          {customBackground && (
+            <div className="absolute inset-0 pointer-events-none" style={{zIndex:1,backgroundImage:`url(${customBackground})`,backgroundSize:"cover",backgroundPosition:"center",opacity:0.22}} aria-hidden="true" />
           )}
 
           {/* 챕터 배지 */}

@@ -1,0 +1,9 @@
+모아필름 통합 수정본 v3
+
+포함: 사진 자동배치, 브라우저 영상 내보내기, Canva 무료 PNG/JPG 배경 가져오기, 고객 미리보기 및 내보내기에 배경 반영(반투명 오버레이).
+
+중요 제한: 관리자 템플릿은 현재 localStorage 저장이므로 동일 브라우저에서만 보입니다. 다른 기기/고객에게 배포하려면 Supabase 인증·DB·Storage 및 RLS 연결이 필요합니다. 관리자 권한도 현재 실제 서버 인증이 아닙니다. 상용 결제 및 BGM은 미구현입니다.
+
+GitHub video-update 브랜치의 식전영상 만들기 폴더에 이 ZIP의 내용물 전체를 반영하세요. main 브랜치는 변경하지 마세요.
+Cloudflare Pages: root=식전영상 만들기, build=npm run build, output=dist.
+검증: 패키지 설치 및 브라우저 실제 동작 테스트는 완료되지 않았습니다.

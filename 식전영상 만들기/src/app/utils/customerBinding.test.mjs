@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import * as t from './customerBinding.test-build.js';
+const p={version:1,id:'p',name:'test',scenes:[{id:'s',name:'첫 장면',bg:{type:'solid',color:'#fff'},scene:{duration:4,transition:'fade',transitionDuration:0.5,musicVolume:0.8},elements:[{id:'a',type:'text',x:0,y:0,w:20,h:10,rotation:0,opacity:1,text:'원본'},{id:'b',type:'photo_zone',x:0,y:0,w:20,h:10,rotation:0,opacity:1}]}]};
+let v=t.emptyCustomerValues();assert.equal(t.fieldCount(p),2);assert.equal(t.photoCount(p),1);assert.equal(t.textCount(p),1);assert.equal(t.canPreview(p),true);assert.equal(t.canPublishCustomerVideo(p,v),false);assert.equal(t.completionRate(p,v),0);
+v=t.setCustomerText(v,'a','신랑 신부');v=t.setCustomerPhoto(v,'b','data:image/png;base64,AA');
+assert.equal(t.completionRate(p,v),100);assert.equal(t.canPublishCustomerVideo(p,v),true);assert.deepEqual(t.validateCustomerValues(p,v),[]);
+const personalized=t.applyCustomerProject(p,v);assert.equal(personalized.scenes[0].elements[0].text,'신랑 신부');assert.equal(personalized.scenes[0].elements[1].customerPhoto,v.photos.b);assert.equal(p.scenes[0].elements[0].text,'원본');
+assert.equal(t.sceneAtTime(p,1),0);assert.deepEqual(t.sceneStartTimes(p),[0]);assert.equal(t.customerSummary(p,v).photosFilled,1);
+assert.deepEqual(t.parseCustomerValues(t.serializeCustomerValues(v)),v);
+assert.equal(t.clearCustomerPhoto(v,'b').photos.b,undefined);assert.equal(t.clearCustomerText(v,'a').texts.a,undefined);
+assert.deepEqual(t.removeUnknownValues(p,{texts:{a:'ok',unknown:'x'},photos:{b:'blob:foo',bad:'bad'}}),{texts:{a:'ok'},photos:{b:'blob:foo'}});
+assert.ok(t.validateCustomerValues(p,{texts:{bad:'x'},photos:{}}).length);
+console.log('PASS customer binding smoke tests');

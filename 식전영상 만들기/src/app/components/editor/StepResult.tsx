@@ -1,5 +1,5 @@
 import { renderVideo, saveVideo, RenderSlide } from "../../utils/videoExport";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Download, Share2, Check, Film, Copy, CreditCard, Shield, Eye, Pencil, Lock, History, FileVideo } from "lucide-react";
 import { DraftStatus } from "../../utils/draftStorage";
 
@@ -12,6 +12,7 @@ interface StepResultProps {
   fixedBgm: string;
   photoCount: number;
   renderSlides: RenderSlide[];
+  templateId?: string;
   videoStatus: DraftStatus;   // draft | preview | paid
   onRevise: () => void;       // 시안 수정하기 (draft/preview만)
   onPaid: () => void;
@@ -30,7 +31,7 @@ const PROGRESS_STEPS = [
 
 export function StepResult({
   groomName, brideName, weddingDate,
-  templateTitle, templateEmoji, fixedBgm, photoCount, renderSlides,
+  templateTitle, templateEmoji, fixedBgm, photoCount, renderSlides, templateId,
   videoStatus, onRevise, onPaid, onRestart, onGoHistory,
 }: StepResultProps) {
   const [progress, setProgress] = useState(0);
@@ -46,7 +47,11 @@ export function StepResult({
   const [exportError, setExportError] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
-  const [videoExtension, setVideoExtension] = useState("webm"); // 수정 횟수 (무제한)
+  const [videoExtension, setVideoExtension] = useState("webm");
+  const [transition, setTransition] = useState<"cut" | "fade" | "slide" | "zoom">("fade");
+  const [secondsPerSlide, setSecondsPerSlide] = useState(3);
+  const exportController = useRef<AbortController | null>(null);
+  const [audioFile, setAudioFile] = useState<File | undefined>(); // 수정 횟수 (무제한)
 
   // 실제 인코딩은 사용자가 영상 파일 만들기 버튼을 누를 때 시작합니다.
   useEffect(() => { setIsDone(true); }, []);
@@ -57,13 +62,25 @@ export function StepResult({
 
   const handleExport = async () => {
     if (exporting) return;
+    const controller = new AbortController();
+    exportController.current = controller;
     setExporting(true); setExportProgress(0); setExportError('');
     try {
       const result = await renderVideo({
         slides: renderSlides,
+        backgroundUrl: (() => {
+          try {
+            const saved = JSON.parse(localStorage.getItem(`moafilm_template_design_${templateId || "w1"}`) || "null");
+            return saved?.bg?.type === "image" ? saved.bg.imageDataUrl : undefined;
+          } catch { return undefined; }
+        })(),
         title: `${groomName} ♥ ${brideName}`,
         subtitle: fmtDate,
         onProgress: setExportProgress,
+        transition,
+        secondsPerSlide,
+        audioFile,
+        signal: controller.signal,
       });
       if (videoUrl) URL.revokeObjectURL(videoUrl);
       const url = URL.createObjectURL(result.blob);
@@ -71,7 +88,7 @@ export function StepResult({
       saveVideo(result.blob, result.extension, 'moafilm-wedding');
     } catch (error) {
       setExportError(error instanceof Error ? error.message : '영상 제작에 실패했습니다.');
-    } finally { setExporting(false); }
+    } finally { exportController.current = null; setExporting(false); }
   };
 
   const handlePay = () => {
@@ -124,7 +141,7 @@ export function StepResult({
       </div>
 
       <div className="flex-1 px-4 py-5 space-y-4 pb-10">
-        {exporting && <div className="rounded-xl bg-white p-4 text-sm text-rose-600 font-bold">실제 영상 제작 중: {exportProgress}% · 화면을 닫지 마세요.</div>}
+        {exporting && <div className="rounded-xl bg-white p-4 text-sm text-rose-600 font-bold flex items-center justify-between gap-2">실제 영상 제작 중: {exportProgress}% <button type="button" className="px-3 py-1 rounded-lg bg-gray-800 text-white" onClick={() => exportController.current?.abort()}>제작 취소</button></div>}
         {exportError && <div role="alert" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">{exportError}</div>}
         {videoUrl && <div className="rounded-xl bg-white p-4 space-y-2"><div className="font-bold text-sm">제작된 영상 확인</div><video src={videoUrl} controls playsInline className="w-full rounded-lg"/><button onClick={() => videoBlob && saveVideo(videoBlob, videoExtension, 'moafilm-wedding')} className="w-full rounded-xl bg-green-600 text-white py-3 font-bold">영상 다시 다운로드 ({videoExtension.toUpperCase()})</button></div>}
 
@@ -197,7 +214,7 @@ export function StepResult({
                   ["해상도", "1280 × 720"],
                   ["화질", "HD 720p"],
                   ["비율", "16 : 9"],
-                  ["BGM", fixedBgm],
+                  ["BGM", audioFile ? audioFile.name : "미포함 (음악 파일 선택 필요)"],
                   ["사진 수", `${photoCount}장`],
                 ].map(([k, v]) => (
                   <div key={k} className="bg-gray-50 rounded-xl px-3 py-2.5">
@@ -208,6 +225,21 @@ export function StepResult({
               </div>
             </div>
 
+            <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
+              <div className="text-sm font-bold">영상 출력 설정</div>
+              <label className="block text-xs">장면 전환
+                <select aria-label="장면 전환 효과" value={transition} onChange={e => setTransition(e.target.value as typeof transition)} className="mt-1 w-full border rounded-lg p-2">
+                  <option value="cut">바로 전환</option><option value="fade">페이드</option><option value="slide">슬라이드</option><option value="zoom">확대</option>
+                </select>
+              </label>
+              <label className="block text-xs">사진당 재생 시간: {secondsPerSlide}초
+                <input aria-label="사진당 재생 시간" type="range" min="1" max="10" step="1" value={secondsPerSlide} onChange={e => setSecondsPerSlide(Number(e.target.value))} className="w-full" />
+              </label>
+              <label className="block text-xs">배경음악 (선택, MP3/WAV)
+                <input aria-label="배경음악 파일" type="file" accept="audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav" onChange={e => setAudioFile(e.target.files?.[0])} className="block mt-1 w-full text-xs" />
+              </label>
+              <p className="text-xs text-gray-500">음악은 선택한 파일만 영상에 포함됩니다. MP4 지원 여부는 브라우저 인코더에 따라 달라집니다.</p>
+            </div>
             <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-3">
               <button onClick={handleExport} disabled={exporting} className="w-full py-4 rounded-2xl font-bold bg-green-500 text-white flex items-center justify-center gap-2 hover:bg-green-600 transition-all shadow-lg shadow-green-200 active:scale-95">
                 <Download size={18} /> 실제 영상 생성 및 다운로드
@@ -315,7 +347,7 @@ export function StepResult({
                 ))}
               </div>
               <div className="mt-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 text-[10px] text-amber-700 leading-relaxed">
-                · 영상 파일은 브라우저에서 실제 생성됩니다. MP4 지원 여부는 브라우저에 따라 다르며 음악은 포함되지 않습니다.
+                · 영상 파일은 브라우저에서 실제 생성됩니다. MP4 지원 여부는 브라우저에 따라 다르며 선택한 음악 파일은 브라우저가 지원하는 경우 영상에 포함됩니다.
               </div>
             </div>
 
