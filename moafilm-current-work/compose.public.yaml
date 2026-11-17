@@ -1,0 +1,23 @@
+services:
+  moafilm:
+    build: .
+    restart: unless-stopped
+    expose: ["8890"]
+    env_file: .env
+    volumes: ["moafilm-data:/data"]
+    security_opt: ["no-new-privileges:true"]
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      MOAFILM_DOMAIN: ${MOAFILM_DOMAIN:?Set MOAFILM_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [moafilm]
+volumes:
+  moafilm-data:
+  caddy-data:
+  caddy-config:
