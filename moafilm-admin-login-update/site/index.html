@@ -61,7 +61,7 @@ function sceneLength(){if(!t)return;let a=t.scenes||[];if(!a.length)return;let f
 function changeTransition(){if(!t)return;t.transition=$('sceneTransition').value;sceneLength();drawScenes()}
 function moveScene(i,delta){let a=t.scenes||[],j=i+delta;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];drawScenes()}
 function deleteScene(i){t.scenes.splice(i,1);sceneLength();drawScenes()}
-async function addScenes(){try{if(!t)throw Error('템플릿을 먼저 선택하세요');let files=[...$('sceneFiles').files];if(!files.length)throw Error('장면 MP4를 선택하세요');t.scenes ||= [];for(const f of files){let r=await api('/api/scene',{template_id:t.id,video:await read(f)});t.scenes.push(r)}sceneLength();drawScenes();$('sceneStatus').textContent=t.scenes.length+'개 장면 등록. 템플릿 저장을 누르세요.'}catch(e){$('sceneStatus').textContent=e.message}}
+async function addScenes(){try{if(!t)throw Error('템플릿을 먼저 선택하세요');let files=[...$('sceneFiles').files];if(!files.length)throw Error('장면 MP4를 선택하세요');t.scenes ||= [];for(const f of files){if(f.size===0||f.size>25_000_000)throw Error('장면 MP4는 25MB 이하여야 합니다: '+f.name);$('sceneStatus').textContent='장면 업로드 중: '+f.name;let response=await fetch('/api/scene/upload',{method:'POST',headers:{'Content-Type':'video/mp4','X-Moafilm-Template-Id':t.id},body:f});let raw=await response.text(),r;try{r=JSON.parse(raw)}catch(e){throw Error('장면 업로드 서버 응답 오류 (HTTP '+response.status+')')}if(!response.ok)throw Error(r.error||'장면 업로드 실패');t.scenes.push(r)}sceneLength();drawScenes();$('sceneStatus').textContent=t.scenes.length+'개 장면 등록. 템플릿 저장을 누르세요.'}catch(e){$('sceneStatus').textContent=e.message}}
 
 // v10: 관리자 작업 흐름 도우미. 기존 렌더링/서버 계약을 변경하지 않음.
 let lastSavedTemplateSignature='', copiedSlotPosition=null, suppressEditorDirty=false;
