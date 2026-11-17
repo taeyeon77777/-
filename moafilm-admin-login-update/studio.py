@@ -296,6 +296,32 @@ class Handler(BaseHTTPRequestHandler):
   with file.open('rb') as f:shutil.copyfileobj(f,self.wfile)
  def do_POST(self):
   try:
+   # Stream MP4 bytes directly instead of decoding a 33MB+ Base64 JSON payload.
+   if urlparse(self.path).path=='/api/template/upload':
+    length=int(self.headers.get('Content-Length','0'))
+    if not 0<length<=25_000_000:raise ValueError('MP4 파일 크기는 25MB 이하여야 합니다')
+    origin=self.headers.get('Origin')
+    if origin and origin not in (f'http://{HOST}:{PORT}',f'http://localhost:{PORT}',os.environ.get('MOAFILM_PUBLIC_ORIGIN','')):raise ValueError('허용되지 않은 요청 출처')
+    user=self.require(admin=True)
+    if not user:return
+    name=self.headers.get('X-Moafilm-Template-Name','').strip()
+    if not 1<=len(name)<=100:raise ValueError('템플릿 이름은 1~100자여야 합니다')
+    ident=uuid.uuid4().hex[:12];bg=ROOT/'backgrounds'/(ident+'.mp4')
+    try:
+     remaining=length
+     with bg.open('wb') as output:
+      while remaining:
+       chunk=self.rfile.read(min(256*1024,remaining))
+       if not chunk:raise ValueError('MP4 업로드 도중 연결이 종료되었습니다')
+       output.write(chunk);remaining-=len(chunk)
+     meta=probe(bg)
+     if not 1<=meta['duration']<=180 or meta['width']>3840 or meta['height']>2160 or abs(meta['width']/meta['height']-16/9)>.03:raise ValueError('16:9 MP4, 1~180초만 지원')
+     t={'id':ident,'name':name,'duration':round(meta['duration'],3),'slots':[]}
+     (ROOT/'templates'/(ident+'.json')).write_text(json.dumps(t,ensure_ascii=False,indent=2),encoding='utf-8')
+     return self.send(200,t)
+    except Exception:
+     bg.unlink(missing_ok=True)
+     raise
    length=int(self.headers.get('Content-Length','0'))
    if not 0<length<=35_000_000:raise ValueError('요청 크기 제한 초과')
    origin=self.headers.get('Origin')
