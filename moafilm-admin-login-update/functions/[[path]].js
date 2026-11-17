@@ -9,6 +9,14 @@ export async function onRequest(context) {
   const target = new URL(url.pathname + url.search, backend);
   const headers = new Headers(request.headers);
   headers.delete('host');
+  // Only forward same-origin browser writes; normalize Origin for backend CSRF validation.
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    const incomingOrigin = request.headers.get('Origin');
+    if (incomingOrigin && incomingOrigin !== url.origin) {
+      return new Response(JSON.stringify({error:'허용되지 않은 요청 출처'}), {status:403,headers:{'Content-Type':'application/json'}});
+    }
+    headers.set('Origin', url.origin);
+  }
   const init = {method:request.method,headers,redirect:'manual'};
   if (request.method !== 'GET' && request.method !== 'HEAD') init.body = request.body;
   const response = await fetch(target, init);
