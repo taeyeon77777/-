@@ -15,7 +15,9 @@ export async function onRequest(context) {
     if (incomingOrigin && incomingOrigin !== url.origin) {
       return new Response(JSON.stringify({error:'허용되지 않은 요청 출처'}), {status:403,headers:{'Content-Type':'application/json'}});
     }
-    headers.set('Origin', url.origin);
+    // The edge already checked browser Origin. Do not forward it to the internal
+    // service: its origin allowlist is independent of the public Pages domain.
+    headers.delete('Origin');
   }
   const init = {method:request.method,headers,redirect:'manual'};
   if (request.method !== 'GET' && request.method !== 'HEAD') init.body = request.body;
