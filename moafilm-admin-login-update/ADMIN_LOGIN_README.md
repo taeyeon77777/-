@@ -8,3 +8,4 @@
 - GitHub 업로드 시 이 ZIP의 *내용물*을 `moafilm-current-work` 폴더에 넣고, Cloudflare Pages 빌드 출력은 `site`, Functions는 프로젝트 루트 `functions/`.
 - 비밀번호 변경은 Supabase Auth `/auth/v1/user` PUT 호출을 사용. 기존 로그인 세션은 최대 1시간이며 만료 후 재로그인.
 - 실제 운영 환경에서 인증/권한/영상 렌더링 통합 테스트가 필요함.
+Cloudflare 배포 업데이트
