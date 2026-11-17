@@ -21,6 +21,14 @@ export async function onRequest(context) {
   }
   const init = {method:request.method,headers,redirect:'manual'};
   if (request.method !== 'GET' && request.method !== 'HEAD') init.body = request.body;
-  const response = await fetch(target, init);
-  return new Response(response.body, {status:response.status,headers:response.headers});
+  try {
+    const response = await fetch(target, init);
+    if (!response.body && response.status !== 204 && response.status !== 304) {
+      return new Response(JSON.stringify({error:'영상 서버가 빈 응답을 보냈습니다 (HTTP '+response.status+'). Render 로그와 메모리 사용량을 확인하세요.'}), {status:502,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
+    }
+    return new Response(response.body, {status:response.status,headers:response.headers});
+  } catch (error) {
+    console.error('MoaFilm backend proxy failed:', error);
+    return new Response(JSON.stringify({error:'영상 서버 연결 실패. Render 서버가 재시작 중이거나 업로드 처리 중 연결이 끊어졌을 수 있습니다.'}), {status:502,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
+  }
 }
