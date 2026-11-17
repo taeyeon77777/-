@@ -304,7 +304,7 @@ class Handler(BaseHTTPRequestHandler):
     if origin and origin not in (f'http://{HOST}:{PORT}',f'http://localhost:{PORT}',os.environ.get('MOAFILM_PUBLIC_ORIGIN','')):raise ValueError('허용되지 않은 요청 출처')
     user=self.require(admin=True)
     if not user:return
-    name=self.headers.get('X-Moafilm-Template-Name','').strip()
+    name=unquote(self.headers.get('X-Moafilm-Template-Name','')).strip()
     if not 1<=len(name)<=100:raise ValueError('템플릿 이름은 1~100자여야 합니다')
     ident=uuid.uuid4().hex[:12];bg=ROOT/'backgrounds'/(ident+'.mp4')
     try:
