@@ -1,0 +1,13 @@
+services:
+  moafilm:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8890:8890"
+    env_file: .env
+    volumes:
+      - moafilm-data:/data
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  moafilm-data:
